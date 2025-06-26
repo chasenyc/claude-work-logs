@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Execution Log Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 20px 12px 45px;
+            border: 2px solid #e1e5e9;
+            border-radius: 25px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-box::before {
+            content: "🔍";
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #e1e5e9;
+            background: #f8f9fa;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .filter-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .stats {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            display: block;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .log-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .log-entry {
+            border-bottom: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+
+        .log-entry:hover {
+            background: #f8f9fb;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-header {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            font-size: 13px;
+        }
+
+        .log-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        }
+
+        .log-type.system {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .log-type.assistant {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .log-type.tool {
+            background: #e8f5e8;
+            color: #388e3c;
+        }
+
+        .log-type.failed-tool {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .log-type.user {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .log-meta {
+            color: #666;
+            font-size: 12px;
+            margin-left: 10px;
+            flex: 1;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        }
+
+        .log-toggle {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+        }
+
+        .log-entry.expanded .log-toggle {
+            transform: rotate(180deg);
+        }
+
+        .log-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background: #fafbfc;
+        }
+
+        .log-entry.expanded .log-content {
+            max-height: 2000px;
+        }
+
+        .log-content-inner {
+            padding: 8px 12px 12px;
+        }
+
+        .json-viewer {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .json-key {
+            color: #63b3ed;
+        }
+
+        .json-string {
+            color: #68d391;
+        }
+
+        .json-number {
+            color: #fbb6ce;
+        }
+
+        .json-boolean {
+            color: #f6ad55;
+        }
+
+        .json-null {
+            color: #a0aec0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .no-results-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .data-input {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-header h3 {
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 1.4rem;
+        }
+
+        .input-header p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        #jsonInput {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            resize: vertical;
+            min-height: 150px;
+            transition: border-color 0.3s ease;
+        }
+
+        #jsonInput:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .load-btn, .clear-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .load-btn {
+            background: #667eea;
+            color: white;
+        }
+
+        .load-btn:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+
+        .clear-btn {
+            background: #f8f9fa;
+            color: #666;
+            border: 1px solid #e1e5e9;
+        }
+
+        .clear-btn:hover {
+            background: #e9ecef;
+        }
+
+        .load-status {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .load-status.success {
+            color: #28a745;
+        }
+
+        .load-status.error {
+            color: #dc3545;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .show-input-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .show-input-btn:hover {
+            background: #5a67d8;
+            border-color: #5a67d8;
+            transform: translateY(-1px);
+        }
+
+        .terminal-text {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #2d3748;
+            white-space: pre-wrap;
+            margin: 4px 0;
+        }
+
+        .terminal-tool-call {
+            margin: 8px 0;
+        }
+
+        .tool-header {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .tool-params {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 2px;
+            padding: 6px 8px;
+            font-size: 11px;
+            overflow-x: auto;
+            margin: 0;
+        }
+
+        .terminal-thinking details {
+            margin: 8px 0;
+        }
+
+        .terminal-thinking summary {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            color: #4a5568;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .thinking-content {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #666;
+            margin-top: 6px;
+            padding-left: 12px;
+            border-left: 2px solid #e2e8f0;
+        }
+
+        .terminal-tool-result {
+            margin: 6px 0;
+        }
+
+        .tool-output {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.3;
+            border-radius: 2px;
+            padding: 6px 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .tool-output.success {
+            background: #f7fafc;
+            border-color: #c6f6d5;
+            color: #2d3748;
+        }
+
+        .tool-output.error {
+            background: #fed7d7;
+            border-color: #feb2b2;
+            color: #c53030;
+        }
+
+        .tool-output pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .original-tool-call {
+            margin: 6px 0 12px 0;
+            background: #fefcbf;
+            border: 1px solid #f6e05e;
+            border-radius: 4px;
+            padding: 8px;
+        }
+
+        .original-tool-header {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            color: #744210;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .original-tool-params {
+            background: #fffaf0;
+            border: 1px solid #fbd38d;
+            border-radius: 2px;
+            padding: 6px 8px;
+            font-size: 11px;
+            overflow-x: auto;
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            color: #744210;
+        }
+
+        .tool-expand {
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .expand-btn {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 11px;
+            color: #4a5568;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 2px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            display: inline-block;
+        }
+
+        .expand-btn:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .user-message {
+            background: #f8f9fa;
+            border-left: 3px solid #6c757d;
+            padding: 6px 8px;
+            margin: 4px 0;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .system-result {
+            background: #f0fff4;
+            border: 1px solid #c6f6d5;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+
+        .result-header {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            color: #22543d;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #c6f6d5;
+            padding-bottom: 6px;
+        }
+
+        .result-content {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #2d3748;
+            margin-bottom: 12px;
+            white-space: pre-wrap;
+        }
+
+        .result-metadata {
+            border-top: 1px solid #c6f6d5;
+            padding-top: 8px;
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .metadata-item {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 11px;
+        }
+
+        .metadata-label {
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .metadata-value {
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-box {
+                min-width: auto;
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .log-header {
+                padding: 15px 20px 10px;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .log-meta {
+                margin-left: 0;
+                margin-top: 8px;
+            }
+
+            .input-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .load-btn, .clear-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Claude Code Execution Log</h1>
+            <p>Interactive viewer for Claude Code session data with advanced filtering and search</p>
+        </div>
+
+        <div class="data-input" id="dataInputSection">
+            <div class="input-header">
+                <h3>Load Data</h3>
+                <p>Paste your JSON data below or it will try to load from report.json</p>
+            </div>
+            <textarea id="jsonInput" placeholder="Paste your JSON data here..." rows="8"></textarea>
+            <div class="input-controls">
+                <button id="loadDataBtn" class="load-btn">Load Data</button>
+                <button id="clearDataBtn" class="clear-btn">Clear</button>
+                <span id="loadStatus" class="load-status"></span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search through messages, tools, or content...">
+            </div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="system">System</button>
+                <button class="filter-btn" data-filter="assistant">Assistant</button>
+                <button class="filter-btn" data-filter="tool">Tools</button>
+                <button class="filter-btn" data-filter="failed-tool">Failed Tools</button>
+                <button class="filter-btn" data-filter="user">User</button>
+                <button id="showInputBtn" class="show-input-btn hidden">📋 Load New Data</button>
+            </div>
+        </div>
+
+        <div class="stats" id="statsContainer">
+            <div class="stat-item">
+                <span class="stat-number" id="totalEntries">-</span>
+                <div class="stat-label">Total Entries</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="assistantMessages">-</span>
+                <div class="stat-label">Assistant Messages</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="toolCalls">-</span>
+                <div class="stat-label">Tool Calls</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="systemMessages">-</span>
+                <div class="stat-label">System Messages</div>
+            </div>
+        </div>
+
+        <div class="log-container">
+            <div id="logEntries">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>Loading Claude Code execution log...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
