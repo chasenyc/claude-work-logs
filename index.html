@@ -121,6 +121,32 @@
             border-color: #667eea;
         }
 
+        .filter-btn {
+            position: relative;
+        }
+
+        .filter-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .filter-badge.show {
+            display: flex;
+        }
+
         .stats {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -245,7 +271,7 @@
         }
 
         .log-entry.expanded .log-content {
-            max-height: 2000px;
+            max-height: none;
         }
 
         .log-content-inner {
@@ -261,7 +287,7 @@
             font-size: 13px;
             line-height: 1.5;
             overflow-x: auto;
-            max-height: 400px;
+            max-height: 800px;
             overflow-y: auto;
         }
 
@@ -579,6 +605,12 @@
             margin: 8px 0;
         }
 
+        .system-result.error {
+            background: #fed7d7;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+        }
+
         .result-header {
             font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
             font-size: 14px;
@@ -699,7 +731,10 @@
                 <button class="filter-btn" data-filter="system">System</button>
                 <button class="filter-btn" data-filter="assistant">Assistant</button>
                 <button class="filter-btn" data-filter="tool">Tools</button>
-                <button class="filter-btn" data-filter="failed-tool">Failed Tools</button>
+                <button class="filter-btn" data-filter="failed-tool">
+                    Failed Tools
+                    <span class="filter-badge" id="failedToolBadge">0</span>
+                </button>
                 <button class="filter-btn" data-filter="user">User</button>
                 <button id="showInputBtn" class="show-input-btn hidden">📋 Load New Data</button>
             </div>

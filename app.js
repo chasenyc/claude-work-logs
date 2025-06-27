@@ -9,6 +9,7 @@ class ClaudeLogViewer {
             assistant: 0,
             system: 0,
             tool: 0,
+            failedTool: 0,
             user: 0
         };
         
@@ -166,15 +167,36 @@ class ClaudeLogViewer {
 
     updateStats() {
         this.stats.total = this.logData.length;
-        this.stats.assistant = this.logData.filter(e => e.type === 'assistant').length;
-        this.stats.system = this.logData.filter(e => e.type === 'system').length;
-        this.stats.tool = this.logData.filter(e => e.type === 'tool').length;
-        this.stats.user = this.logData.filter(e => e.type === 'user').length;
+        this.stats.assistant = this.logData.filter(e => this.getEntryType(e) === 'assistant').length;
+        this.stats.system = this.logData.filter(e => this.getEntryType(e) === 'system').length;
+        // Count both 'tool' and 'failed-tool' as tools for the main counter
+        this.stats.tool = this.logData.filter(e => {
+            const type = this.getEntryType(e);
+            return type === 'tool' || type === 'failed-tool';
+        }).length;
+        // Count failed tools separately for the badge
+        this.stats.failedTool = this.logData.filter(e => this.getEntryType(e) === 'failed-tool').length;
+        this.stats.user = this.logData.filter(e => this.getEntryType(e) === 'user').length;
 
         document.getElementById('totalEntries').textContent = this.stats.total;
         document.getElementById('assistantMessages').textContent = this.stats.assistant;
         document.getElementById('toolCalls').textContent = this.stats.tool;
         document.getElementById('systemMessages').textContent = this.stats.system;
+        
+        // Update failed tool badge
+        this.updateFailedToolBadge();
+    }
+
+    updateFailedToolBadge() {
+        const badge = document.getElementById('failedToolBadge');
+        if (badge) {
+            badge.textContent = this.stats.failedTool;
+            if (this.stats.failedTool > 0) {
+                badge.classList.add('show');
+            } else {
+                badge.classList.remove('show');
+            }
+        }
     }
 
     renderEntries() {
@@ -333,7 +355,7 @@ class ClaudeLogViewer {
                     ` : ''}
                 </div>
             `;
-        } else if (entry.subtype === 'success' && entry.result) {
+        } else if (entry.subtype === 'success' && 'result' in entry) {
             // Format session result nicely
             const duration = entry.duration_ms ? `${(entry.duration_ms / 1000).toFixed(1)}s` : 'N/A';
             const cost = entry.total_cost_usd ? `$${entry.total_cost_usd.toFixed(4)}` : 'N/A';
@@ -343,7 +365,49 @@ class ClaudeLogViewer {
                 <div class="system-result">
                     <div class="result-header">✅ Session Complete</div>
                     <div class="result-content">
-                        ${this.formatText(entry.result)}
+                        ${entry.result ? this.formatText(entry.result) : '<em style="color: #666;">No output message</em>'}
+                    </div>
+                    <div class="result-metadata">
+                        <div class="metadata-grid">
+                            <div class="metadata-item">
+                                <span class="metadata-label">Duration:</span>
+                                <span class="metadata-value">${duration}</span>
+                            </div>
+                            <div class="metadata-item">
+                                <span class="metadata-label">Turns:</span>
+                                <span class="metadata-value">${turns}</span>
+                            </div>
+                            <div class="metadata-item">
+                                <span class="metadata-label">Cost:</span>
+                                <span class="metadata-value">${cost}</span>
+                            </div>
+                            ${entry.usage?.input_tokens ? `
+                                <div class="metadata-item">
+                                    <span class="metadata-label">Input Tokens:</span>
+                                    <span class="metadata-value">${entry.usage.input_tokens.toLocaleString()}</span>
+                                </div>
+                            ` : ''}
+                            ${entry.usage?.output_tokens ? `
+                                <div class="metadata-item">
+                                    <span class="metadata-label">Output Tokens:</span>
+                                    <span class="metadata-value">${entry.usage.output_tokens.toLocaleString()}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (entry.subtype === 'error_during_execution') {
+            // Format session error nicely
+            const duration = entry.duration_ms ? `${(entry.duration_ms / 1000).toFixed(1)}s` : 'N/A';
+            const cost = entry.total_cost_usd || entry.cost_usd ? `$${(entry.total_cost_usd || entry.cost_usd).toFixed(4)}` : 'N/A';
+            const turns = entry.num_turns || 'N/A';
+            
+            return `
+                <div class="system-result error">
+                    <div class="result-header">❌ Session Error</div>
+                    <div class="result-content">
+                        <em style="color: #c53030;">An error occurred during session execution</em>
                     </div>
                     <div class="result-metadata">
                         <div class="metadata-grid">
