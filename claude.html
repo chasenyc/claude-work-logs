@@ -639,6 +639,96 @@
             background: #555555;
         }
 
+        /* Diff view styles */
+        .edit-file-path {
+            color: #86efac;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 6px 0 8px 0;
+            padding: 4px 8px;
+            background: #1a2e1a;
+            border: 1px solid #166534;
+            border-radius: 3px;
+        }
+
+        .diff-container {
+            margin: 8px 0;
+            border: 1px solid #333333;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        .diff-line {
+            display: flex;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .diff-line-number {
+            width: 40px;
+            padding: 2px 8px;
+            text-align: right;
+            background: #2a2a2a;
+            color: #666666;
+            border-right: 1px solid #333333;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .diff-line-content {
+            padding: 2px 8px;
+            flex: 1;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .diff-line.removed {
+            background: #2e1a1a;
+            border-left: 3px solid #991b1b;
+        }
+
+        .diff-line.removed .diff-line-number {
+            background: #3a1a1a;
+            color: #fca5a5;
+        }
+
+        .diff-line.removed .diff-line-content {
+            color: #fca5a5;
+        }
+
+        .diff-line.added {
+            background: #1a2e1a;
+            border-left: 3px solid #166534;
+        }
+
+        .diff-line.added .diff-line-number {
+            background: #1a3a1a;
+            color: #86efac;
+        }
+
+        .diff-line.added .diff-line-content {
+            color: #86efac;
+        }
+
+        .diff-line.context {
+            background: #1a1a1a;
+        }
+
+        .diff-line.context .diff-line-content {
+            color: #cccccc;
+        }
+
+        .diff-header {
+            background: #2a2a2a;
+            color: #888888;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            border-bottom: 1px solid #333333;
+        }
+
         @media (max-width: 768px) {
             .controls-bar {
                 flex-direction: column;
@@ -664,6 +754,15 @@
             .data-input-modal {
                 width: 95%;
                 padding: 16px;
+            }
+
+            .diff-line-number {
+                width: 30px;
+                padding: 2px 4px;
+            }
+
+            .diff-line-content {
+                padding: 2px 4px;
             }
         }
     </style>
@@ -1263,6 +1362,17 @@
                                     <pre class="tool-params">${item.input.file_path}</pre>
                                 </div>
                             `;
+                        } else if (item.name === 'Edit' && item.input && item.input.file_path && item.input.old_string && item.input.new_string) {
+                            // Special handling for Edit tool - show a nice diff view
+                            html += `
+                                <div class="terminal-tool-call">
+                                    <div class="tool-header"># ${item.name}</div>
+                                    <div class="edit-file-path">${item.input.file_path}</div>
+                                    <div class="diff-container">
+                                        ${this.renderDiff(item.input.old_string, item.input.new_string)}
+                                    </div>
+                                </div>
+                            `;
                         } else {
                             html += `
                                 <div class="terminal-tool-call">
@@ -1506,6 +1616,94 @@
                     console.error('JSON Parse Error:', error);
                     this.setLoadStatus(`Invalid JSON: ${error.message}`, 'error');
                 }
+            }
+
+            renderDiff(oldString, newString) {
+                // Simple line-by-line diff implementation
+                const oldLines = oldString.split('\n');
+                const newLines = newString.split('\n');
+                
+                let html = '<div class="diff-header">Changes</div>';
+                
+                // Find common prefix and suffix to optimize display
+                let commonStart = 0;
+                let commonEnd = 0;
+                
+                // Find common lines at the start
+                while (commonStart < oldLines.length && 
+                       commonStart < newLines.length && 
+                       oldLines[commonStart] === newLines[commonStart]) {
+                    commonStart++;
+                }
+                
+                // Find common lines at the end
+                while (commonEnd < (oldLines.length - commonStart) && 
+                       commonEnd < (newLines.length - commonStart) && 
+                       oldLines[oldLines.length - 1 - commonEnd] === newLines[newLines.length - 1 - commonEnd]) {
+                    commonEnd++;
+                }
+                
+                let lineNumber = 1;
+                
+                // Show context before changes (limited)
+                const contextStart = Math.max(0, commonStart - 2);
+                for (let i = contextStart; i < commonStart; i++) {
+                    html += `
+                        <div class="diff-line context">
+                            <div class="diff-line-number">${lineNumber}</div>
+                            <div class="diff-line-content">${this.escapeHtml(oldLines[i])}</div>
+                        </div>
+                    `;
+                    lineNumber++;
+                }
+                
+                // Show removed lines
+                const removedLines = oldLines.slice(commonStart, oldLines.length - commonEnd);
+                for (let i = 0; i < removedLines.length; i++) {
+                    html += `
+                        <div class="diff-line removed">
+                            <div class="diff-line-number">-</div>
+                            <div class="diff-line-content">${this.escapeHtml(removedLines[i])}</div>
+                        </div>
+                    `;
+                }
+                
+                // Show added lines
+                const addedLines = newLines.slice(commonStart, newLines.length - commonEnd);
+                for (let i = 0; i < addedLines.length; i++) {
+                    html += `
+                        <div class="diff-line added">
+                            <div class="diff-line-number">+</div>
+                            <div class="diff-line-content">${this.escapeHtml(addedLines[i])}</div>
+                        </div>
+                    `;
+                }
+                
+                // Show context after changes (limited)
+                const contextEnd = Math.min(oldLines.length, oldLines.length - commonEnd + 2);
+                for (let i = oldLines.length - commonEnd; i < contextEnd; i++) {
+                    if (i < oldLines.length) {
+                        html += `
+                            <div class="diff-line context">
+                                <div class="diff-line-number">${lineNumber}</div>
+                                <div class="diff-line-content">${this.escapeHtml(oldLines[i])}</div>
+                            </div>
+                        `;
+                        lineNumber++;
+                    }
+                }
+                
+                return html;
+            }
+
+            escapeHtml(text) {
+                if (!text) return '';
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
             }
 
             setLoadStatus(message, type = '') {
